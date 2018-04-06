@@ -50,8 +50,8 @@ class MatchPrediction {
             if (!is_numeric($dataItem['games'])) {
                 throw new InvalidArgumentException("Games num is not number for team '{$id}'.");
             }
-            if ($dataItem['games']<0) {
-                throw new InvalidArgumentException("Games num is negative for team '{$id}'.");
+            if ($dataItem['games']<=0) {
+                throw new InvalidArgumentException("Games num have to be positive for team '{$id}'.");
             }
             if (!isset($dataItem['goals']) || !isset($dataItem['goals']['scored'])  || !isset($dataItem['goals']['skiped'])) {
                 throw new InvalidArgumentException("Goals info is not set for team '{$id}'.");
