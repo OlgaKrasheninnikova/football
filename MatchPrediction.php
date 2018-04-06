@@ -4,9 +4,14 @@ include 'Team.php';
 include 'MathHelper.php';
 
 
+/**
+ * Класс для прогназирования исхода матча с помощью распределения Пуассона
+ *
+ * Class MatchPrediction
+ */
 class MatchPrediction {
 
-    const PRECISION = 5;
+    const PRECISION = 0.1;
 
     /**
      * исходные данные
@@ -20,96 +25,100 @@ class MatchPrediction {
      */
     private $avgGoalsInChMMatch;
 
-    /**
-     * @var Team
-     */
-    private $team1;
-
-    /**
-     * @var Team
-     */
-    private $team2;
-
-    /**
-     * Прогноз. Сколько забъет команда 1
-     * @var int
-     */
-    private $team1Goals;
-
-    /**
-     * Прогноз. Сколько забъет команда 2
-     * @var int
-     */
-    private $team2Goals;
-
-    /**
-     * Список вероятностей забивания m голов для каждой из каманд
-     * @var array
-     */
-    private $goalsProbabilityList = [];
-
 
     /**
      * MatchPrediction constructor.
      * @param array $data
+     * @throws InvalidArgumentException
+     */
+    public function __construct(array $data)
+    {
+        $this->validateData($data);
+        $this->data = $data;
+    }
+
+
+    /**
+     * @param array $data
+     * @throws InvalidArgumentException
+     */
+    private function validateData(array $data) {
+        foreach ($data as $id => $dataItem) {
+            if (!isset($dataItem['games'])) {
+                throw new InvalidArgumentException("Games num is not set for team '{$id}'.");
+            }
+            if (!isset($dataItem['goals']) || !isset($dataItem['goals']['scored'])  || !isset($dataItem['goals']['skiped'])) {
+                throw new InvalidArgumentException("Goals info is not set for team '{$id}'.");
+            }
+        }
+    }
+
+    /**
      * @param int $teamId1
      * @param int $teamId2
+     * @throws InvalidArgumentException
+     * @return array
      */
-    public function __construct(array $data, int $teamId1, int $teamId2)
-    {
-        $this->data = $data;
-        $this->team1 = new Team($teamId1, $this->getTeamData($teamId1));
-        $this->team2 = new Team($teamId2, $this->getTeamData($teamId2));
-    }
+    public function predicate(int $teamId1, int $teamId2) {
 
-    /**
-     *
-     */
-    public function execute() {
+        $team1 = new Team($teamId1, $this->getTeamData($teamId1) );
+        $team2 = new Team($teamId2, $this->getTeamData($teamId2) );
+
         $this->setAvgGoalsInChMMatch();
-        $this->getProbabilityList();
-        $this->team1Goals = $this->getRandomPrediction($this->team1);
-        $this->team2Goals = $this->getRandomPrediction($this->team2);
+
+        return $this->calculate($team1, $team2);
     }
 
-    /**
-     * @param Team $team
-     * @return int|string
-     */
-    private function getRandomPrediction(Team $team) {
-        $randomValue = MathHelper::getRandom();
-
-        $prevVal = $nextVal = 0;
-        foreach ($this->goalsProbabilityList[$team->getId()] as $n => $val) {
-            $nextVal += $val;
-            if ($randomValue >= $prevVal && $randomValue < $nextVal) {
-                return $n;
-            }
-            $prevVal += $val;
-        }
-        //на случай, если попали в const::PRECISION, сгенерим новое случайное число
-        return $this->getRandomPrediction($team);
-    }
 
     /**
-     *
+     * @param Team $team1
+     * @param Team $team2
+     * @return array
      */
-    private function getProbabilityList() {
-        $mu1 = $this->getMu1();
-        $mu2 = $this->getMu2();
-        echo "mu === " . $mu1 . '----' . $mu2 . "\n";
-        $t1ProbabilitiesSum = $t2ProbabilitiesSum = 0;
+    private function calculate(Team $team1, Team $team2) {
+        $mu1 = $this->getMu($team1, $team2);
+        $mu2 = $this->getMu($team2, $team1);
+
+        $randomValue1 = MathHelper::getRandom();
+        $randomValue2 = MathHelper::getRandom();
+
+        $team1ProbabilitiesSum = $team2ProbabilitiesSum = 0;
+        $goalsTeam1 = $goalsTeam2 = null;
         $m = 0;
         do {
-            $this->goalsProbabilityList[$this->team1->getId()][$m] = $this->getProbability($mu1, $m)*MathHelper::PERCENTS;
-            $t1ProbabilitiesSum += $this->goalsProbabilityList[$this->team1->getId()][$m];
-
-            $this->goalsProbabilityList[$this->team2->getId()][$m] = $this->getProbability($mu2, $m)*MathHelper::PERCENTS;
-            $t2ProbabilitiesSum += $this->goalsProbabilityList[$this->team2->getId()][$m];
+            if (is_null($goalsTeam1)) {
+                $goalsTeam1 = $this->handleNextGoalsNum($team1ProbabilitiesSum, $m, $mu1, $randomValue1);
+            }
+            if (is_null($goalsTeam2)) {
+                $goalsTeam2 = $this->handleNextGoalsNum($team2ProbabilitiesSum, $m, $mu2, $randomValue2);
+            }
+            if (!is_null($goalsTeam1) && !is_null($goalsTeam2)) {
+                return [$goalsTeam1, $goalsTeam2];
+            }
 
             $m++;
-        } while ((MathHelper::PERCENTS-$t1ProbabilitiesSum)>self::PRECISION || (MathHelper::PERCENTS-$t2ProbabilitiesSum)>self::PRECISION);
-        var_dump($this->goalsProbabilityList);
+        } while ((MathHelper::PERCENTS-$team1ProbabilitiesSum)>self::PRECISION || (MathHelper::PERCENTS-$team2ProbabilitiesSum)>self::PRECISION);
+
+        //если вдруг попали в self::PRECISION пересчитаем все заново
+        $this->calculate($team1, $team2);
+
+    }
+
+    /**
+     * @param float $probabilitiesSum
+     * @param int $m
+     * @param float $mu
+     * @param float $randomValue
+     * @return int|null
+     */
+    private function handleNextGoalsNum(float &$probabilitiesSum, int $m, float $mu, float $randomValue) {
+        $val = $this->getProbability($mu, $m)*MathHelper::PERCENTS;
+        $prevVal = $probabilitiesSum;
+        $probabilitiesSum += $val;
+        if ($randomValue >= $prevVal && $randomValue < $probabilitiesSum) {
+            return $m;
+        }
+        return null;
     }
 
     /**
@@ -118,32 +127,28 @@ class MatchPrediction {
      * @return float
      */
     private function getProbability(float $mu, int $m) : float  {
-        return $mu**$m / MathHelper::fact($m) * MathHelper::E**(-$mu);
+        return round($mu**$m / MathHelper::fact($m) * M_E**(-$mu), 4);
     }
 
     /**
      * @return float
      */
-    private function getMu1() : float {
-        return $this->team1->getAttackKoef($this->avgGoalsInChMMatch) *
-            $this->team2->getDefenseKoef($this->avgGoalsInChMMatch) *
+    private function getMu(Team $team, Team $oponent) : float {
+        return $team->getAttackKoef($this->avgGoalsInChMMatch) *
+            $oponent->getDefenseKoef($this->avgGoalsInChMMatch) *
             $this->avgGoalsInChMMatch;
     }
 
-    /**
-     * @return float
-     */
-    private function getMu2() : float {
-        return $this->team2->getAttackKoef($this->avgGoalsInChMMatch) *
-            $this->team1->getDefenseKoef($this->avgGoalsInChMMatch) *
-            $this->avgGoalsInChMMatch;
-    }
 
     /**
      * @param int $teamId
      * @return array
+     * @throws InvalidArgumentException
      */
     private function getTeamData(int $teamId) : array {
+        if (!isset($this->data[$teamId])) {
+            throw new InvalidArgumentException("Team id '{$teamId}' is incorrect.");
+        }
         return $this->data[$teamId];
     }
 
@@ -151,6 +156,9 @@ class MatchPrediction {
      *
      */
     private function setAvgGoalsInChMMatch() {
+        if (!empty($this->avgGoalsInChMMatch)) {
+            return;
+        }
         $gamesSum = 0;
         $scoredSum = 0;
         $skipedSum = 0;
@@ -166,22 +174,6 @@ class MatchPrediction {
         $avgGoals = ($scoredSum+$skipedSum)/2;  //сколько примерно было забито голов
 
         $this->avgGoalsInChMMatch = $avgGoals/count($this->data)/$gamesSum;
-    }
-
-    /**
-     * @return mixed
-     */
-    public function getTeam1Goals()
-    {
-        return $this->team1Goals;
-    }
-
-    /**
-     * @return mixed
-     */
-    public function getTeam2Goals()
-    {
-        return $this->team2Goals;
     }
 
 }

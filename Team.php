@@ -44,9 +44,7 @@ class Team{
      * @return float
      */
     public function getAttackKoef(float $chmAvgGoals) : float  {
-        $a = $this->getAverageScoredForGame() / $chmAvgGoals; //*$this->getEffectiveKoef();
-        echo "attak ". $this->getId() . '===='.$a . "\n";
-        return $a;
+        return $this->getAverageScoredForGame() / $chmAvgGoals;
     }
 
     /**
@@ -54,9 +52,7 @@ class Team{
      * @return float
      */
     public function getDefenseKoef(float $chmAvgGoals) : float  {
-        $a = $this->getAverageSkipedForGame() / $chmAvgGoals; //*$this->getEffectiveKoef();
-        echo "defense ". $this->getId() . '===='.$a . "\n";
-        return $a;
+        return $this->getAverageSkipedForGame() / $chmAvgGoals;
     }
 
     /**

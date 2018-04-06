@@ -1,7 +1,5 @@
 <?php
 
-function getData()
-{
     $data = array(
         0 => array(
             'name' => 'Бразилия', # название команды
@@ -356,7 +354,3 @@ function getData()
             ),
         ),
     );
-    return $data;
-}
-
-//var_dump($data);

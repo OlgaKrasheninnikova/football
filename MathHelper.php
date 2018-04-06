@@ -5,10 +5,9 @@
  */
 class MathHelper {
 
-    const E = 2.71828;
-
     const PERCENTS = 100;
 
+    const RANDOM_CALCULATE_KOEF = 100;
 
     /**
      * @param int $n
@@ -23,17 +22,17 @@ class MathHelper {
     }
 
     /**
-     * @return int
+     * @return float
      */
-    public static function getRandom() : int {
+    public static function getRandom() : float {
         $min = 0;
-        $max = self::PERCENTS;
+        $max = self::PERCENTS*self::RANDOM_CALCULATE_KOEF;
         try {
             $randomValue = random_int($min, $max);
         } catch (Exception $e) {
             $randomValue = rand($min, $max);
         }
-        return $randomValue;
+        return $randomValue/self::RANDOM_CALCULATE_KOEF;
     }
 
 }
