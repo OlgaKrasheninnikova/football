@@ -47,8 +47,20 @@ class MatchPrediction {
             if (!isset($dataItem['games'])) {
                 throw new InvalidArgumentException("Games num is not set for team '{$id}'.");
             }
+            if (!is_numeric($dataItem['games'])) {
+                throw new InvalidArgumentException("Games num is not number for team '{$id}'.");
+            }
+            if ($dataItem['games']<0) {
+                throw new InvalidArgumentException("Games num is negative for team '{$id}'.");
+            }
             if (!isset($dataItem['goals']) || !isset($dataItem['goals']['scored'])  || !isset($dataItem['goals']['skiped'])) {
                 throw new InvalidArgumentException("Goals info is not set for team '{$id}'.");
+            }
+            if (!is_numeric($dataItem['goals']['scored'])  || !is_numeric($dataItem['goals']['skiped'])) {
+                throw new InvalidArgumentException("Goals info is not numbers for team '{$id}'.");
+            }
+            if ($dataItem['goals']['scored']<0  || $dataItem['goals']['skiped']<0) {
+                throw new InvalidArgumentException("Goals info have to be positive for team '{$id}'.");
             }
         }
     }
@@ -112,10 +124,9 @@ class MatchPrediction {
      * @return int|null
      */
     private function handleNextGoalsNum(float &$probabilitiesSum, int $m, float $mu, float $randomValue) {
-        $val = $this->getProbability($mu, $m)*MathHelper::PERCENTS;
-        $prevVal = $probabilitiesSum;
-        $probabilitiesSum += $val;
-        if ($randomValue >= $prevVal && $randomValue < $probabilitiesSum) {
+        $prevProbabilitiesSum = $probabilitiesSum;
+        $probabilitiesSum += $this->getProbability($mu, $m)*MathHelper::PERCENTS;
+        if ($randomValue >= $prevProbabilitiesSum && $randomValue < $probabilitiesSum) {
             return $m;
         }
         return null;
